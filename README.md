@@ -7,7 +7,7 @@ and enable the SSH agent, then clones the private `dotfiles` repo over SSH and r
 ## Usage
 
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/martaver/bootstrap/main/bootstrap.sh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/martaver/bootstrap/master/bootstrap.sh)"
 ```
 
 You'll be prompted for the **bootstrap passphrase**, which decrypts the embedded identifiers
