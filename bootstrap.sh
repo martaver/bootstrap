@@ -18,7 +18,7 @@ CM_PATH="$HOME/.local/share/chezmoi"
 OP_SETTINGS="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/Library/Application Support/1Password/Data/settings/settings.json"
 
 # Single-line base64 AES-256-CBC/PBKDF2 blob of env vars. Encode with ./secrets-write.sh.
-SECRETS_ENCODED='U2FsdGVkX1/k5qIvyTI5t/QR4F98brbcGKugSvGfo3bbnsSUVgoUs1NdYmzBcwGitZp8MI/LxwNGx64bk6TL8Uvo/Af44eWk1+aObpWhVZfBvnbC0yGh857Ut5tTXPR39OPMP84wFTzTM4eMp6nLLzGyCtEwVelE3fiEQ5rI2F4uhBfS/tVmstTVTWxV187OQpvvahudiz2/pcNsmzLHSXSPEmYd1Sb2TvYCZ6FIBaRQMrOfTKLwgO1obtmPQ5xjvjhF7jw/b6UcLjHyBgohWOPkV42Wpl3Ag2h2Ru6wWLWicZ35hmFaP7Ku5DJz44rGkxAXCyTbwOB8rQgUsGCRoJCuY+ktnOJDA8bxt5YLcKc='
+SECRETS_ENCODED='U2FsdGVkX18mWByFpEBXcapj64yi77y4ioXNKFWVS9kAdpC2DO8MsfAQZTexz8Fzg6daHh1WDNEL7P9VDmJvgjr41ibqt+2MGqeJpkWXSlZH/EZdunDuh5a7Qhfdd3E2aP3evRISnlxNuILxQcu2KVdatLPH21EkiGKoSnTFnsCGnGTeBagmPzIUZwkow+EmQqCcFzip3g5rJel8EeHcmmM+4owT/z93rT9tGzTmr+WnpicpYklp4SVIV56mGfEIAVF/DPMD7mBzH0ERh/aYwW00l2DBWloQO67j/CC0/iYaSGS3PBt8qLknDU26jiRH1BIGWXi0Hj8sudqkR/zDHPuwuEBSwglKJjsMMnC7waeAj4bGtxtIxoyk7rd6/Syu'
 
 # 0. Get the bootstrap passphrase (first arg if given, else prompt) and decrypt FIRST,
 #    so a wrong passphrase fails fast before we install anything. Prompt reads from
@@ -154,7 +154,8 @@ clone_dotfiles() {
 #    an interactive prompt on /dev/tty (stdin is the curl pipe). Idempotent.
 configure_transcrypt() {
   local passphrase
-  passphrase="$(op read "$TRANSCRYPT_OP_REF" --account "$TRANSCRYPT_OP_ACCOUNT" 2>/dev/null || true)"
+  passphrase="$(op item get "$TRANSCRYPT_OP_ITEM_ID" --account "$TRANSCRYPT_OP_ACCOUNT_URL" \
+    --fields password --reveal 2>/dev/null || true)"
   if [ -z "$passphrase" ]; then
     printf 'Transcrypt passphrase: ' >/dev/tty
     read -rs passphrase </dev/tty; printf '\n' >/dev/tty
