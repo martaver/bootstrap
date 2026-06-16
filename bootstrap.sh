@@ -79,7 +79,10 @@ install_homebrew() {
     || echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
   eval "$(/opt/homebrew/bin/brew shellenv)"
   # brew_ensure installs only what's missing — `brew install` still does update/network
-  # work when everything is current, so skip it entirely when the deps are present.
+  # work when everything is current, so skip it entirely when the deps are present.  
+}
+
+install_homebrew_deps() {
   brew_ensure --cask 1password 1password-cli
   brew_ensure transcrypt coreutils
 }
@@ -179,7 +182,8 @@ configure_transcrypt() {
 main() {
   decrypt_secrets "$@"      # 0. decrypt embedded identifiers
   ensure_touchid            # 1. Touch ID fingerprint enrolled
-  install_homebrew          # 2. Homebrew + 1Password + transcrypt
+  install_homebrew          # 2. Homebrew
+  install_homebrew_deps
   verify_1password          # 3. 1Password ready + signed in
   configure_ssh             # 4. SSH agent + GitHub host key
   verify_github_ssh         # 5. prove SSH auth to GitHub
