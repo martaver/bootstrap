@@ -107,10 +107,12 @@ Then re-run this bootstrap.
 EOF
   exit 1
 }
+
 op_touchid_unlock() { grep -q '"security.authenticatedUnlock.appleTouchId" *: *true' "$OP_SETTINGS" 2>/dev/null; }
 op_account_added()  { op account list 2>/dev/null | grep "$SSH_KEY_OP_ACCOUNT_URL"; }
 op_key_readable()   { op item get "$SSH_KEY_OP_ITEM_ID" --account "$SSH_KEY_OP_ACCOUNT_URL"; }
 op_agent_has_keys() { SSH_AUTH_SOCK="$AGENT_SOCK" ssh-add -l; }
+
 verify_1password() {
   printf '\nChecking 1Password configuration:\n' >/dev/tty
   require "'Unlock using Touch ID' enabled"        op_touchid_unlock
@@ -120,12 +122,26 @@ verify_1password() {
   require "SSH agent serving keys"                  op_agent_has_keys
 }
 
-# 4. Configure SSH: 1Password agent + seed GitHub host key (no interactive prompt).
+# 4. Configure SSH: 1Password agent + pin our identity + seed GitHub host key.
+#    The agent may serve several keys; writing this item's PUBLIC key to disk and
+#    referencing it via IdentityFile + IdentitiesOnly makes ssh offer ONLY this key
+#    (matched by its public half) from the agent, instead of trying every key it holds.
+#    op is signed in by verify_1password (step 3), so the public key is readable here.
+SSH_PUBKEY_PATH="$HOME/.ssh/id_default.pub"
 configure_ssh() {
   install -m 700 -d ~/.ssh
-  grep -q IdentityAgent ~/.ssh/config 2>/dev/null || cat >> ~/.ssh/config <<EOF
+  local pubkey
+  pubkey="$(op item get "$SSH_KEY_OP_ITEM_ID" --account "$SSH_KEY_OP_ACCOUNT_URL" \
+    --fields "label=public key" --reveal 2>/dev/null)" \
+    || { echo "Could not read the public key from 1Password item." >&2; exit 1; }
+  [ -n "$pubkey" ] || { echo "1Password returned an empty public key." >&2; exit 1; }
+  printf '%s\n' "$pubkey" > "$SSH_PUBKEY_PATH"
+  chmod 600 "$SSH_PUBKEY_PATH"
+  cat > ~/.ssh/config <<EOF
 Host *
   IdentityAgent "${AGENT_SOCK}"
+  IdentityFile "${SSH_PUBKEY_PATH}"
+  IdentitiesOnly yes
 EOF
   ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts 2>/dev/null
 }
