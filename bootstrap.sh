@@ -57,7 +57,7 @@ EOF
 }
 
 # 2. Install Homebrew (its installer pulls in Xcode CLT) + 1Password GUI & CLI, and
-#    transcrypt (+ coreutils), which must exist before the clone so the dotfiles
+#    transcrypt (+ coreutils, jq), which must exist before the clone so the dotfiles
 #    worktree can be decrypted in place once transcrypt is configured below.
 brew_ensure() {  # brew_ensure [--cask] pkg...
   local list_flag=--formula install_flag='' missing='' pkg
@@ -84,7 +84,7 @@ install_homebrew() {
 
 install_homebrew_deps() {
   brew_ensure --cask 1password 1password-cli
-  brew_ensure transcrypt coreutils
+  brew_ensure transcrypt coreutils jq
 }
 
 # 3. Verify 1Password is ready, then sign in. The checks run once and fail fast with
@@ -126,21 +126,25 @@ verify_1password() {
 #    The agent may serve several keys; writing this item's PUBLIC key to disk and
 #    referencing it via IdentityFile + IdentitiesOnly makes ssh offer ONLY this key
 #    (matched by its public half) from the agent, instead of trying every key it holds.
-#    op is signed in by verify_1password (step 3), so the public key is readable here.
-SSH_PUBKEY_PATH="$HOME/.ssh/id_default.pub"
+#    op is signed in by verify_1password (step 3), so the item is readable here.
+#    The .pub file is named after the 1Password item title (e.g. id_martaver.pub).
 configure_ssh() {
   install -m 700 -d ~/.ssh
-  local pubkey
+  local title pubkey pubkey_path
+  title="$(op item get "$SSH_KEY_OP_ITEM_ID" --account "$SSH_KEY_OP_ACCOUNT_URL" --format json 2>/dev/null \
+    | jq -r '.title // empty')"
+  [ -n "$title" ] || { echo "Could not read the SSH key item title from 1Password." >&2; exit 1; }
+  pubkey_path="$HOME/.ssh/${title}.pub"
   pubkey="$(op item get "$SSH_KEY_OP_ITEM_ID" --account "$SSH_KEY_OP_ACCOUNT_URL" \
     --fields "label=public key" --reveal 2>/dev/null)" \
     || { echo "Could not read the public key from 1Password item." >&2; exit 1; }
   [ -n "$pubkey" ] || { echo "1Password returned an empty public key." >&2; exit 1; }
-  printf '%s\n' "$pubkey" > "$SSH_PUBKEY_PATH"
-  chmod 600 "$SSH_PUBKEY_PATH"
+  printf '%s\n' "$pubkey" > "$pubkey_path"
+  chmod 600 "$pubkey_path"
   cat > ~/.ssh/config <<EOF
 Host *
   IdentityAgent "${AGENT_SOCK}"
-  IdentityFile "${SSH_PUBKEY_PATH}"
+  IdentityFile "${pubkey_path}"
   IdentitiesOnly yes
 EOF
   ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts 2>/dev/null
@@ -157,7 +161,7 @@ verify_github_ssh() {
     *"successfully authenticated"*) return ;;
   esac
   keyName="$(op item get "$SSH_KEY_OP_ITEM_ID" --account "$SSH_KEY_OP_ACCOUNT_URL" --format json 2>/dev/null \
-    | sed -n 's/.*"title" *: *"\([^"]*\)".*/\1/p' | head -1)"
+    | jq -r '.title // empty')"
   echo "SSH to GitHub failed — is ${keyName:-the SSH key}'s PUBLIC key on the GitHub account?" >&2
   echo "$auth" >&2
   exit 1
@@ -194,17 +198,17 @@ configure_transcrypt() {
   git -C "$CM_PATH" config --local core.hooksPath hooks
 }
 
+
 # --- main: the bootstrap sequence ---
-main() {
-  decrypt_secrets "$@"      # 0. decrypt embedded identifiers
-  ensure_touchid            # 1. Touch ID fingerprint enrolled
-  install_homebrew          # 2. Homebrew
-  install_homebrew_deps
-  verify_1password          # 3. 1Password ready + signed in
-  configure_ssh             # 4. SSH agent + GitHub host key
-  verify_github_ssh         # 5. prove SSH auth to GitHub
-  clone_dotfiles            # 6. clone the private dotfiles repo
-  configure_transcrypt      # 7. decrypt the repo's transcrypt files
-  exec "$CM_PATH/setup.sh"  # 8. hand off to the dotfiles setup
-}
-main "$@"
+
+decrypt_secrets "$@"      # 0. decrypt embedded identifiers
+ensure_touchid            # 1. Touch ID fingerprint enrolled
+install_homebrew          # 2. Homebrew
+install_homebrew_deps
+verify_1password          # 3. 1Password ready + signed in
+configure_ssh             # 4. SSH agent + GitHub host key
+verify_github_ssh         # 5. prove SSH auth to GitHub
+clone_dotfiles            # 6. clone the private dotfiles repo
+configure_transcrypt      # 7. decrypt the repo's transcrypt files
+exec "$CM_PATH/setup.sh"  # 8. hand off to the dotfiles setup
+
